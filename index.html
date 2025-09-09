@@ -40,7 +40,7 @@
     <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden p-6 sm:p-10">
         <header class="text-center mb-4">
             <!-- Ganti URL di bawah ini dengan URL logo Anda -->
-            <img src="assets/Logo.png" alt="Logo Warga Tengki 3" class="mx-auto h-24 w-24 mb-4 rounded-full">
+            <img src="https://placehold.co/120x120/556EE9/FFFFFF?text=Logo" alt="Logo Warga Tengki 3" class="mx-auto h-24 w-24 mb-4 rounded-full">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800">Laporan Kas Warga Tengki 3</h1>
             <p class="mt-2 text-gray-600 text-sm sm:text-base">
                 Lihat laporan pemasukan dan pengeluaran kas secara langsung.
@@ -236,9 +236,16 @@
             }
         }
         
+        // Fungsi baru untuk memparsing string tanggal DD-MM-YYYY
+        function parseDateString(s) {
+            const parts = s.split('-');
+            // Perhatian: new Date(year, month, day) menggunakan 0-indeks untuk bulan (Jan = 0)
+            return new Date(parts[2], parts[1] - 1, parts[0]);
+        }
+        
         function populateMonthFilter(data) {
             const months = [...new Set(data.map(row => {
-                const date = new Date(row[0]);
+                const date = parseDateString(row[0]);
                 return `${date.toLocaleString('id-ID', { month: 'long', year: 'numeric' })}`;
             }))];
             
@@ -272,7 +279,7 @@
             let filteredData = allCashData.filter(row => {
                 const [tanggal, keterangan, pemasukan, pengeluaran] = row;
                 
-                if (selectedMonth && new Date(tanggal).toLocaleString('id-ID', { month: 'long', year: 'numeric' }) !== selectedMonth) {
+                if (selectedMonth && parseDateString(tanggal).toLocaleString('id-ID', { month: 'long', year: 'numeric' }) !== selectedMonth) {
                     return false;
                 }
                 
@@ -327,7 +334,7 @@
             
             data.forEach(row => {
                 const [tanggal, , pemasukan, pengeluaran] = row;
-                const date = new Date(tanggal);
+                const date = parseDateString(tanggal);
                 const monthYear = date.toLocaleString('id-ID', { month: 'long', year: 'numeric' });
                 
                 const pemasukanVal = parseFloat(pemasukan) || 0;
@@ -344,7 +351,11 @@
             const summaryBody = document.getElementById('monthly-summary-body');
             summaryBody.innerHTML = '';
             
-            const sortedMonths = Object.keys(summary).sort((a, b) => new Date(a) - new Date(b));
+            const sortedMonths = Object.keys(summary).sort((a, b) => {
+                const dateA = parseDateString('01-' + a.split(' ')[0] + '-' + a.split(' ')[1]);
+                const dateB = parseDateString('01-' + b.split(' ')[0] + '-' + b.split(' ')[1]);
+                return dateA - dateB;
+            });
             let runningSaldo = 0;
             
             sortedMonths.forEach(month => {
