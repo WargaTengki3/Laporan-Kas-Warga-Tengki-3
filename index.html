@@ -39,6 +39,8 @@
     <!-- Kontainer Utama -->
     <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden p-6 sm:p-10">
         <header class="text-center mb-4">
+            <!-- Ganti URL di bawah ini dengan URL logo Anda -->
+            <img src="https://placehold.co/120x120/556EE9/FFFFFF?text=Logo" alt="Logo Warga Tengki 3" class="mx-auto h-24 w-24 mb-4 rounded-full">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800">Laporan Kas Warga Tengki 3</h1>
             <p class="mt-2 text-gray-600 text-sm sm:text-base">
                 Lihat laporan pemasukan dan pengeluaran kas secara langsung.
@@ -122,6 +124,47 @@
                 Tidak ada data yang ditemukan.
             </div>
         </div>
+        
+        <!-- Pemisah -->
+        <div class="border-t border-gray-300 my-10"></div>
+
+        <!-- Rekap Iuran Warga -->
+        <div class="mb-8">
+            <h2 class="text-2xl sm:text-3xl font-extrabold text-blue-800 text-center mb-6">Rekap Iuran Warga</h2>
+
+            <!-- Kontrol Filter Rekap -->
+            <div class="flex flex-col sm:flex-row gap-4 mb-6 items-center">
+                <div class="relative flex-1">
+                    <select id="rekap-bulan-filter" class="w-full pl-4 pr-10 py-2 border rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                        <option value="">Semua Bulan</option>
+                    </select>
+                </div>
+                <div class="relative flex-1">
+                    <input type="text" id="rekap-search-input" placeholder="Cari nama warga..." class="w-full pl-4 pr-4 py-2 border rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+
+            <!-- Daftar Belum Bayar -->
+            <div id="unpaid-list-container" class="bg-red-100 text-red-800 p-4 rounded-xl shadow-inner mb-6 hidden">
+                <h3 class="text-lg font-bold">Warga yang Belum Membayar Iuran:</h3>
+                <ul id="unpaid-list" class="list-disc list-inside mt-2">
+                    <!-- Daftar warga yang belum bayar akan diisi di sini -->
+                </ul>
+            </div>
+
+            <table id="contributions-table" class="min-w-full bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+                <thead class="bg-blue-700 text-white">
+                    <tr>
+                        <th class="py-3 px-4 text-left text-xs sm:text-sm font-semibold uppercase">Nama Warga</th>
+                        <th class="py-3 px-4 text-left text-xs sm:text-sm font-semibold uppercase">Bulan</th>
+                        <th class="py-3 px-4 text-left text-xs sm:text-sm font-semibold uppercase">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="contributions-body" class="divide-y divide-gray-200">
+                    <!-- Data iuran akan diisi di sini -->
+                </tbody>
+            </table>
+        </div>
     </div>
 
     <!-- Footer -->
@@ -131,30 +174,50 @@
 
     <script>
         const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzQ4rDtO4BStxchpBfl095L4rm8Sk4tIQPBTDv15LPo8r8sq7PU33OhFbEcQLc9D6yr/exec';
-        let allData = [];
+        let allCashData = [];
+        let allContributionsData = [];
 
-        async function fetchReport() {
+        async function loadAllData() {
             try {
+                // Tampilkan loading state
                 document.getElementById('loading-state').classList.remove('hidden');
                 document.getElementById('report-container').classList.remove('hidden');
                 document.getElementById('cash-report-table').classList.add('hidden');
+                document.getElementById('contributions-table').classList.add('hidden');
                 document.getElementById('error-state').classList.add('hidden');
                 
-                const response = await fetch(APPS_SCRIPT_URL);
-                if (!response.ok) {
-                    throw new Error('Jaringan tidak responsif atau URL salah. Pastikan Apps Script Anda memiliki akses "Anyone".');
-                }
-                const data = await response.json();
+                // Ambil data laporan kas
+                const cashResponse = await fetch(APPS_SCRIPT_URL + '?reportType=cash_report');
+                if (!cashResponse.ok) throw new Error('Gagal memuat laporan kas.');
+                const cashData = await cashResponse.json();
+
+                // Ambil data rekap iuran
+                const contributionsResponse = await fetch(APPS_SCRIPT_URL + '?reportType=contributions');
+                if (!contributionsResponse.ok) throw new Error('Gagal memuat rekap iuran.');
+                const contributionsData = await contributionsResponse.json();
                 
                 document.getElementById('loading-state').classList.add('hidden');
 
-                if (data && data.length > 1) {
-                    allData = data.slice(1);
-                    populateMonthFilter(allData);
-                    filterAndRender();
+                if (cashData && cashData.length > 1) {
+                    allCashData = cashData.slice(1);
+                    populateMonthFilter(allCashData);
+                    filterAndRenderCashReport();
                     document.getElementById('cash-report-table').classList.remove('hidden');
                 } else {
-                    document.getElementById('error-state').textContent = 'Tidak ada data laporan yang ditemukan.';
+                    console.warn('Tidak ada data laporan kas ditemukan.');
+                }
+
+                if (contributionsData && contributionsData.length > 1) {
+                    allContributionsData = contributionsData.slice(1);
+                    populateRekapMonthFilter(allContributionsData);
+                    filterAndRenderContributions();
+                    document.getElementById('contributions-table').classList.remove('hidden');
+                } else {
+                    console.warn('Tidak ada data rekap iuran ditemukan.');
+                }
+                
+                if (cashData.length <= 1 && contributionsData.length <= 1) {
+                    document.getElementById('error-state').textContent = 'Tidak ada data yang ditemukan. Pastikan Google Sheets sudah terisi.';
                     document.getElementById('error-state').classList.remove('hidden');
                 }
 
@@ -187,21 +250,32 @@
                 filterSelect.appendChild(option);
             });
         }
+        
+        function populateRekapMonthFilter(data) {
+            // Catatan: Aplikasi mengambil format bulan dari Google Sheets. Pastikan format di sheet
+            // sudah sesuai (misalnya, "September 2025").
+            const months = [...new Set(data.map(row => row[1]))]; // Kolom Bulan
+            const filterSelect = document.getElementById('rekap-bulan-filter');
+            months.forEach(month => {
+                const option = document.createElement('option');
+                option.value = month;
+                option.textContent = month;
+                filterSelect.appendChild(option);
+            });
+        }
 
-        function filterAndRender() {
+        function filterAndRenderCashReport() {
             const selectedMonth = document.getElementById('bulan-filter').value;
             const selectedType = document.getElementById('tipe-filter').value;
             const searchTerm = document.getElementById('search-input').value.toLowerCase();
             
-            let filteredData = allData.filter(row => {
+            let filteredData = allCashData.filter(row => {
                 const [tanggal, keterangan, pemasukan, pengeluaran] = row;
                 
-                // Filter by month
                 if (selectedMonth && new Date(tanggal).toLocaleString('id-ID', { month: 'long', year: 'numeric' }) !== selectedMonth) {
                     return false;
                 }
                 
-                // Filter by type
                 if (selectedType === 'pemasukan' && (parseFloat(pemasukan) || 0) === 0) {
                     return false;
                 }
@@ -209,7 +283,6 @@
                     return false;
                 }
                 
-                // Filter by search term
                 if (searchTerm && !keterangan.toLowerCase().includes(searchTerm)) {
                     return false;
                 }
@@ -217,11 +290,11 @@
                 return true;
             });
             
-            displayData(filteredData);
-            renderMonthlySummary(allData);
+            displayCashData(filteredData);
+            renderMonthlySummary(allCashData);
         }
 
-        function displayData(data) {
+        function displayCashData(data) {
             const tableBody = document.getElementById('report-body');
             tableBody.innerHTML = '';
             
@@ -291,6 +364,71 @@
             
             document.getElementById('saldo-akhir').textContent = formatCurrency(totalSaldo);
         }
+        
+        function filterAndRenderContributions() {
+            const selectedMonth = document.getElementById('rekap-bulan-filter').value;
+            const searchTerm = document.getElementById('rekap-search-input').value.toLowerCase();
+            
+            let filteredData = allContributionsData.filter(row => {
+                const [nama, bulan, status] = row;
+                
+                // Filter by month
+                if (selectedMonth && bulan !== selectedMonth) {
+                    return false;
+                }
+                
+                // Filter by search term
+                if (searchTerm && !nama.toLowerCase().includes(searchTerm)) {
+                    return false;
+                }
+                
+                return true;
+            });
+
+            displayContributionsData(filteredData);
+        }
+
+        function displayContributionsData(data) {
+            const tableBody = document.getElementById('contributions-body');
+            const unpaidList = document.getElementById('unpaid-list');
+            
+            tableBody.innerHTML = '';
+            unpaidList.innerHTML = '';
+            
+            let unpaidFound = false;
+            
+            data.forEach(row => {
+                const [nama, bulan, status] = row;
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-gray-50';
+                
+                let statusClass = '';
+                let statusText = status;
+
+                if (status && status.toLowerCase() === 'lunas') {
+                    statusClass = 'text-green-600 font-bold';
+                } else {
+                    statusClass = 'text-red-600 font-bold';
+                    unpaidFound = true;
+                    const li = document.createElement('li');
+                    li.textContent = `${nama} (${bulan})`;
+                    unpaidList.appendChild(li);
+                }
+                
+                tr.innerHTML = `
+                    <td class="py-3 px-4 text-sm text-gray-700">${nama}</td>
+                    <td class="py-3 px-4 text-sm text-gray-700">${bulan}</td>
+                    <td class="py-3 px-4 text-sm ${statusClass}">${statusText}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+            
+            if (unpaidFound) {
+                document.getElementById('unpaid-list-container').classList.remove('hidden');
+            } else {
+                document.getElementById('unpaid-list-container').classList.add('hidden');
+            }
+        }
 
         function formatCurrency(amount) {
             return new Intl.NumberFormat('id-ID', {
@@ -300,12 +438,14 @@
             }).format(amount);
         }
         
-        document.getElementById('bulan-filter').addEventListener('change', filterAndRender);
-        document.getElementById('tipe-filter').addEventListener('change', filterAndRender);
-        document.getElementById('search-input').addEventListener('input', filterAndRender);
+        document.getElementById('bulan-filter').addEventListener('change', filterAndRenderCashReport);
+        document.getElementById('tipe-filter').addEventListener('change', filterAndRenderCashReport);
+        document.getElementById('search-input').addEventListener('input', filterAndRenderCashReport);
         
-        document.addEventListener('DOMContentLoaded', fetchReport);
-
+        document.getElementById('rekap-bulan-filter').addEventListener('change', filterAndRenderContributions);
+        document.getElementById('rekap-search-input').addEventListener('input', filterAndRenderContributions);
+        
+        document.addEventListener('DOMContentLoaded', loadAllData);
     </script>
 </body>
 </html>
