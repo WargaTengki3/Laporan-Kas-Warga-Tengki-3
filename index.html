@@ -40,7 +40,7 @@
     <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-2xl overflow-hidden p-6 sm:p-10">
         <header class="text-center mb-4">
             <!-- Ganti URL di bawah ini dengan URL logo Anda -->
-            <img src="assets/Logo.png" alt="Logo Warga Tengki 3" class="mx-auto h-24 w-24 mb-4 rounded-full">
+            <img src="assets/logo.png" alt="Logo Warga Tengki 3" class="mx-auto h-24 w-24 mb-4 rounded-full">
             <h1 class="text-3xl sm:text-4xl font-extrabold text-blue-800">Laporan Kas Warga Tengki 3</h1>
             <p class="mt-2 text-gray-600 text-sm sm:text-base">
                 Lihat laporan pemasukan dan pengeluaran kas secara langsung.
@@ -52,6 +52,28 @@
             <marquee class="font-semibold text-sm sm:text-base" behavior="scroll" direction="left" scrollamount="4">
                 Bersama, kita wujudkan Tengki 3 yang lebih baik. - Gotong royong membangun Tengki 3, dari kita, untuk kita. - Satu hati, satu tujuan, demi Tengki 3 tercinta.
             </marquee>
+        </div>
+        
+        <!-- Formulir Unggah Transaksi -->
+        <div class="mb-8 p-6 bg-blue-50 border border-blue-200 rounded-xl shadow-sm">
+            <h2 class="text-xl sm:text-2xl font-bold text-blue-800 mb-4">Unggah Bukti Transaksi</h2>
+            <form id="upload-form" class="space-y-4" enctype="multipart/form-data">
+                <div class="flex flex-col sm:flex-row gap-4">
+                    <input type="text" id="keterangan-input" name="keterangan" placeholder="Keterangan transaksi" required class="flex-1 px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="number" id="pemasukan-input" name="pemasukan" placeholder="Pemasukan (Rp)" class="flex-1 px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <input type="number" id="pengeluaran-input" name="pengeluaran" placeholder="Pengeluaran (Rp)" class="flex-1 px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="bukti-file" class="block text-sm font-medium text-gray-700 mb-1">Pilih File Bukti</label>
+                    <input type="file" id="bukti-file" name="file_bukti" accept="image/*,.pdf" required class="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                </div>
+                <div class="flex items-center justify-between">
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        Unggah & Simpan
+                    </button>
+                    <div id="upload-status" class="text-sm font-medium"></div>
+                </div>
+            </form>
         </div>
         
         <!-- Total Saldo Keseluruhan -->
@@ -114,6 +136,7 @@
                         <th class="py-3 px-2 sm:px-4 text-left text-xs sm:text-sm font-semibold uppercase">Keterangan</th>
                         <th class="py-3 px-2 sm:px-4 text-left text-xs sm:text-sm font-semibold uppercase">Pemasukan</th>
                         <th class="py-3 px-2 sm:px-4 text-left text-xs sm:text-sm font-semibold uppercase">Pengeluaran</th>
+                        <th class="py-3 px-2 sm:px-4 text-left text-xs sm:text-sm font-semibold uppercase">Bukti</th>
                     </tr>
                 </thead>
                 <tbody id="report-body" class="divide-y divide-gray-200">
@@ -314,15 +337,22 @@
             }
             
             data.reverse().forEach(row => {
-                const [tanggal, keterangan, pemasukan, pengeluaran] = row;
+                const [tanggal, keterangan, pemasukan, pengeluaran, buktiUrl] = row;
                 const tr = document.createElement('tr');
                 tr.className = 'hover:bg-gray-50';
                 
+                const buktiHtml = buktiUrl && buktiUrl.startsWith('http') ? 
+                    `<a href="${buktiUrl.replace('thumbnail', 'view')}" target="_blank">
+                        <img src="${buktiUrl}" alt="Bukti Struk" class="w-12 h-auto rounded-md shadow-sm mx-auto">
+                    </a>` : 
+                    `—`;
+
                 tr.innerHTML = `
                     <td class="py-3 px-2 sm:px-4 text-xs sm:text-sm text-gray-700">${tanggal}</td>
                     <td class="py-3 px-2 sm:px-4 text-xs sm:text-sm text-gray-700">${keterangan}</td>
                     <td class="py-3 px-2 sm:px-4 text-xs sm:text-sm text-green-600 font-medium">${formatCurrency(parseFloat(pemasukan) || 0)}</td>
                     <td class="py-3 px-2 sm:px-4 text-xs sm:text-sm text-red-600 font-medium">${formatCurrency(parseFloat(pengeluaran) || 0)}</td>
+                    <td class="py-3 px-2 sm:px-4 text-xs sm:text-sm text-gray-700 text-center">${buktiHtml}</td>
                 `;
                 tableBody.appendChild(tr);
             });
@@ -456,6 +486,62 @@
         document.getElementById('rekap-bulan-filter').addEventListener('change', filterAndRenderContributions);
         document.getElementById('rekap-search-input').addEventListener('input', filterAndRenderContributions);
         
+        document.getElementById('upload-form').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const form = event.target;
+            const statusDiv = document.getElementById('upload-status');
+            const submitBtn = form.querySelector('button[type="submit"]');
+
+            const fileInput = document.getElementById('bukti-file');
+            if (fileInput.files.length === 0) {
+                statusDiv.textContent = 'Gagal: Mohon pilih file bukti terlebih dahulu.';
+                statusDiv.classList.remove('text-green-500');
+                statusDiv.classList.add('text-red-500');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('keterangan', document.getElementById('keterangan-input').value);
+            formData.append('pemasukan', document.getElementById('pemasukan-input').value || 0);
+            formData.append('pengeluaran', document.getElementById('pengeluaran-input').value || 0);
+            formData.append('file_bukti', fileInput.files[0]);
+
+            // Log untuk debugging di sisi klien
+            console.log('--- FormData sebelum dikirim ---');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
+            
+            statusDiv.textContent = 'Mengunggah...';
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch(APPS_SCRIPT_URL, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusDiv.textContent = 'Sukses!';
+                    statusDiv.classList.remove('text-red-500');
+                    statusDiv.classList.add('text-green-500');
+                    form.reset();
+                    // Muat ulang data untuk menampilkan perubahan
+                    loadAllData();
+                } else {
+                    throw new Error(result.error || 'Gagal mengunggah data.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                statusDiv.textContent = `Gagal: ${error.message}`;
+                statusDiv.classList.remove('text-green-500');
+                statusDiv.classList.add('text-red-500');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
         document.addEventListener('DOMContentLoaded', loadAllData);
     </script>
 </body>
